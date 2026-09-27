@@ -1,9 +1,22 @@
-# kandev-plugin-template
+# kandev-plugin-petdex scaffold
 
-A starter template for building a [kandev](https://github.com/kdlbs/kandev)
-**native-UI plugin** — its own git repo, packaged into a versioned tarball and
-installed against a running kandev instance. Click **“Use this template”** on
-GitHub (or copy this repo) to bootstrap your own plugin.
+**Status: unfinished scaffold.** This repository still contains the Kandev
+template example. The manifest id, Go module, UI registration, and package name
+are `kandev-plugin-template`; the manifest author is `your-name-here`. The
+checked-in demo does not implement Petdex behavior, and no Petdex product
+features or owner attribution have been established. These values remain
+unchanged until the product identity decision is made. The release workflow
+rejects the unresolved identity, while local scaffold packages remain
+available for development.
+
+**Release hold:** do not merge until a stable Kandev release includes PR #3943
+and this package has been validated against that release.
+
+This repository is a starter example for a [Kandev](https://github.com/kdlbs/kandev)
+**native-UI plugin**, packaged into a versioned tarball and installed against a
+running Kandev instance. Use the demo as a reference while building the actual
+Petdex plugin; remove features and permissions that the finished plugin does
+not use.
 
 It is a small, complete example of the core plugin surfaces, wired together so
 you can delete what you do not need rather than assemble it from scratch:
@@ -23,9 +36,10 @@ you can delete what you do not need rather than assemble it from scratch:
   merges conditional classes the same way the host components do.
 - **Live theme** — `host.onThemeChange` keeps a readout in the popover current
   when the user flips light/dark.
-- **Chat toolbar action** — a component registered into the `chat-input-actions`
-  slot renders an icon button in the chat composer toolbar, with the current
-  `{ sessionId, taskId, taskTitle }` as `slotProps`.
+- **Chat toolbar action** — one component registered into
+  `chat-input-actions` uses `host.ui.Action` when available and keeps its
+  previous button as the fallback for older supported hosts. The composer
+  passes `{ sessionId, taskId, taskTitle }` as `slotProps`.
 - **Live WS-driven page** — a `registerWsHandler("task.created", ...)`
   handler updates module state that the page re-renders from, live, with no
   reload.
@@ -49,6 +63,10 @@ and unload fencing. It is opt-in and intentionally excluded from the generated
 package until you copy its declarations and adapters into your plugin.
 
 ## Make it yours
+
+Resolve the product id, module/package name, display name, and author with the
+owner before changing the current placeholders. Until then, the repository is
+an unfinished scaffold and must not be released as Petdex.
 
 The plugin **id** appears in four places that must stay in sync. Rename all of
 them from `kandev-plugin-template` to your own id (e.g. `kandev-plugin-acme`):
@@ -135,6 +153,16 @@ carrying the `host.ui` primitives, `host.toast` and `host.utils` that
 install time and refuses an older one, so an operator gets a clear error
 instead of a plugin that loads and then breaks on a missing API.
 
+The `host.ui.Action` export is additive. This scaffold detects it in the
+existing `chat-input-actions` registration and selects the legacy Button on
+older supported hosts, so the current runtime floor stays at `0.86.0`. The
+SDK source pin below identifies the Action API contract; it is not a released
+host version. Do not raise the runtime floor until a stable release is
+identified and the built package has been tested against it.
+
+See [the repository baseline](docs/repository-baseline.md) for the fixed SDK
+pin, Action compatibility rule, package checks, and release boundary.
+
 Raise it as you adopt newer host APIs; lower or drop it if you strip the bundle
 back to the pre-0.86 surface (`Button`, `Card*`, `Tooltip*`).
 
@@ -198,7 +226,18 @@ monorepo:
 ```
 some-dir/
 ├── kandev/                   # https://github.com/kdlbs/kandev, Go module at apps/backend/
-└── kandev-plugin-template/   # this repo
+└── kandev-plugin-petdex/     # this repository
+```
+
+`.kandev-sdk-ref` pins the Go backend and frontend SDK source used by CI,
+package builds, and releases. It is set to
+`570600439036e81f8e9e1c63f15c4abce8a6c846`, which includes host PR #3943.
+Create a private sibling checkout at that exact commit. Do not move an existing
+shared Kandev checkout to a different revision.
+
+```sh
+git clone https://github.com/kdlbs/kandev.git ../kandev
+git -C ../kandev checkout "$(cat .kandev-sdk-ref)"
 ```
 
 Note the module root is `kandev/apps/backend`, not the repo root — `kandev` is
@@ -207,11 +246,11 @@ Adjust the `replace` path if your layout differs. Once `pkg/pluginsdk` ships as
 a standalone, versioned module, this repo will drop the `replace` and pin a
 real version instead.
 
-The frontend recipe follows the same temporary source-checkout model through
+The frontend recipe follows the same source-checkout model through
 `@kandev/plugin-sdk` in `package.json`. It is a runtime-free type dependency:
 the recipe uses `import type`, and the default `ui/bundle.js` remains a
 dependency-free ES module. CI pins both SDK contracts to the same Kandev source
-revision.
+revision. The source pin is separate from the minimum supported host release.
 
 ## Layout
 
@@ -237,16 +276,27 @@ serves it directly. Edit the file and repackage — nothing else to run.
 
 ## Build and test
 
-Install the recipe-only development dependencies once with
-`npm ci --ignore-scripts`; nothing from `node_modules` enters the plugin
-package.
+Use Go 1.26.0 and a Node version allowed by `package.json` (CI uses Node 24).
+Install the locked UI test dependencies with `npm ci --ignore-scripts`;
+`node_modules` does not enter the plugin package.
 
 ```sh
-make build               # go build -o bin/... ./server/...
-make test                # base + recipe Go/TypeScript tests
-make vet                 # base + recipe Go vet
-make verify-package-host # validate a host-only tarball and checksums
+make check-format
+go mod tidy
+git diff --exit-code -- go.mod go.sum
+make vet
+make test
+make audit-recipes
+make build
+make verify-package-host
+make verify-package
 ```
+
+`make test` runs backend and recipe tests, recipe type checking, the Action
+fallback check, and negative package, release-version, and release-identity
+checks. Package verification checks the manifest, UI bundle, declared platform
+binaries, exact file inventory, and SHA-256 checksums. Local packaging is
+allowed while this remains a scaffold.
 
 > Note: bare `go build ./server/...` (no `-o`) fails with `build output
 > "server" already exists and is a directory` — Go's default output name for a
@@ -298,10 +348,11 @@ Reinstalling the same version returns 409 — bump `version` in `manifest.yaml`.
 ## Publish a release
 
 Pull requests run `.github/workflows/ci.yml` (tidy, format, vet, and test) and
-`.github/workflows/build.yml` (host build plus a five-platform package). Push a
-tag that matches the manifest version to run `.github/workflows/release.yml`:
-it repeats verification, cross-compiles all platforms, packs the tarball, and
-creates a GitHub Release with the two assets the kandev
+`.github/workflows/build.yml` (host build plus a five-platform package). The
+release workflow supports a version bump from `main` and a pushed `vX.Y.Z` tag.
+Both paths run backend and UI checks, validate the package, and require the tag,
+manifest version, Makefile version, and packaged manifest version to agree
+before creating a GitHub Release with the two assets the Kandev
 [marketplace](https://github.com/kdlbs/kandev/blob/main/docs/public/plugins-marketplace.md)
 install pipeline expects:
 
@@ -310,16 +361,16 @@ install pipeline expects:
 - `checksums.txt` — the package's internal file checksums, extracted from the
   tarball for inspection and marketplace tooling.
 
-```sh
-# bump VERSION in Makefile + version in manifest.yaml first, then:
-git tag v0.1.0
-git push origin v0.1.0
-```
+The release identity guard currently rejects this repository because the
+template id, display name, and author are unresolved. Do not dispatch a release
+or push a release tag until the owner has resolved those values. Keep the
+release hold above in place until the package has also been tested against a
+stable Kandev release that includes PR #3943.
 
-The workflows check out the kandev monorepo as a sibling so the local Go and
-TypeScript SDK paths resolve (see "Developing against the SDK"). They pin one
-source revision for reproducible provider contracts; advance that pin
-deliberately and rerun both contract suites when adopting a newer SDK.
+The workflows check out the Kandev monorepo as a sibling so the local Go and
+TypeScript SDK paths resolve (see "Developing against the SDK"). They use the
+same fixed source pin for reproducible checks; advance it deliberately and
+rerun both contract suites when adopting a newer SDK.
 
 ## License
 
