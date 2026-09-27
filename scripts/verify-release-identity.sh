@@ -40,7 +40,7 @@ esac
 
 manifest_version=$(sed -nE 's/^version: "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' "$repo_dir/manifest.yaml")
 expected_package="$manifest_id-$manifest_version.tar.gz"
-package_file=$(make -s -C "$repo_dir" package-file) || fail 'could not determine package filename'
+package_file=$(make --no-print-directory -s -C "$repo_dir" package-file) || fail 'could not determine package filename'
 [ "$package_file" = "$expected_package" ] || fail "package filename '$package_file' differs from expected '$expected_package'"
 
 printf 'release identity verification passed for %s (%s)\n' "$manifest_id" "$author"

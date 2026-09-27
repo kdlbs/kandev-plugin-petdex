@@ -43,6 +43,7 @@ expect_failure() {
 valid=$test_dir/valid
 create_fixture "$valid"
 sh "$verify_script" "$valid" >/dev/null
+MAKEFLAGS=w sh "$verify_script" "$valid" >/dev/null
 
 for case_name in template-id template-name placeholder-author mismatched-module mismatched-ui mismatched-binary; do
 	fixture=$test_dir/$case_name

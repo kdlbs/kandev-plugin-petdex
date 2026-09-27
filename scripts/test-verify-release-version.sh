@@ -20,14 +20,14 @@ expect_failure() {
 	name=$1
 	fixture=$2
 	shift 2
-	if (cd "$fixture" && sh "$verify_script" "$@") > "$test_dir/output" 2>&1; then
+	if (cd "$fixture" && MAKEFLAGS=w sh "$verify_script" "$@") > "$test_dir/output" 2>&1; then
 		printf 'expected release verification to reject %s\n' "$name" >&2
 		exit 1
 	fi
 }
 
 make_fixture valid
-(cd "$test_dir/valid" && sh "$verify_script" "v$base_version")
+(cd "$test_dir/valid" && MAKEFLAGS=w sh "$verify_script" "v$base_version")
 
 make_fixture wrong-tag
 expect_failure 'a tag that differs from manifest.yaml' "$test_dir/wrong-tag" "v$wrong_version"
@@ -45,16 +45,16 @@ expect_failure 'a Makefile version that differs from manifest.yaml' "$test_dir/w
 make_fixture wrong-package
 mkdir -p "$test_dir/wrong-package/archive"
 sed "s/^version: \"$base_version\"$/version: \"$wrong_version\"/" "$test_dir/wrong-package/manifest.yaml" > "$test_dir/wrong-package/archive/manifest.yaml"
-package_file=$(cd "$test_dir/wrong-package" && make -s package-file)
+package_file=$(cd "$test_dir/wrong-package" && make --no-print-directory -s package-file)
 tar -czf "$test_dir/wrong-package/$package_file" -C "$test_dir/wrong-package/archive" manifest.yaml
 expect_failure 'an archive manifest version that differs from its tag' "$test_dir/wrong-package" "v$base_version" "$package_file"
 
 make_fixture matching-package
 mkdir -p "$test_dir/matching-package/archive"
 cp "$test_dir/matching-package/manifest.yaml" "$test_dir/matching-package/archive/manifest.yaml"
-package_file=$(cd "$test_dir/matching-package" && make -s package-file)
+package_file=$(cd "$test_dir/matching-package" && make --no-print-directory -s package-file)
 tar -czf "$test_dir/matching-package/$package_file" -C "$test_dir/matching-package/archive" manifest.yaml
-(cd "$test_dir/matching-package" && sh "$verify_script" "v$base_version" "$package_file")
+(cd "$test_dir/matching-package" && MAKEFLAGS=w sh "$verify_script" "v$base_version" "$package_file")
 
 expect_failure 'a non-version release tag' "$test_dir/valid" "release-$base_version"
 printf 'release version negative tests passed\n'
